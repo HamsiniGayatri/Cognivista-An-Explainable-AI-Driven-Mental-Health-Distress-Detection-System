@@ -282,7 +282,7 @@ with tab_single:
                         st.bar_chart(explanation_df["Contribution"])
                     with xai_col2:
                         st.dataframe(
-                            explanation_df.style.background_gradient(cmap='RdYlGn'),
+                            explanation_df,
                             use_container_width=True
                         )
                 else:
