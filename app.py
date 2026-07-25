@@ -12,13 +12,27 @@ from textblob import TextBlob
 # 1. PAGE CONFIGURATION
 # ============================================================
 st.set_page_config(
-    page_title="XAI Mental Health Distress Detector",
+    page_title="Mental Health Distress Detector",
     page_icon="🧠",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
+# Custom CSS to make metrics and containers look more professional
+st.markdown("""
+<style>
+    div[data-testid="metric-container"] {
+        background-color: #f8f9fa;
+        border: 1px solid #e9ecef;
+        padding: 5% 10%;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # ============================================================
-# 2. CONSTANTS & KEYWORDS
+# 2. CONSTANTS & KEYWORDS (Untouched)
 # ============================================================
 FEATURE_COLUMNS = [
     "text_length", "word_count", "num_urls", "num_emojis", 
@@ -34,7 +48,7 @@ STRESS_KEYWORDS = ["stress", "stressed", "overwhelmed", "pressure", "anxious", "
 HELP_KEYWORDS = ["help", "therapy", "therapist", "counselling", "counseling", "support", "doctor", "mental health"]
 
 # ============================================================
-# 3. LOAD MODELS (CACHED)
+# 3. LOAD MODELS (Untouched)
 # ============================================================
 @st.cache_resource
 def load_models():
@@ -53,10 +67,9 @@ def load_models():
 tfidf, scaler, hybrid_model = load_models()
 
 # ============================================================
-# 4. FEATURE EXTRACTION
+# 4. FEATURE EXTRACTION (Untouched)
 # ============================================================
 def extract_features_from_text(text):
-    # Ensure exact same stripping as Tkinter to prevent prediction mismatches
     text = text.strip()
     words = text.split()
     word_count = len(words)
@@ -110,7 +123,7 @@ def extract_features_from_text(text):
     return features
 
 # ============================================================
-# 5. SUGGESTIONS & XAI
+# 5. SUGGESTIONS & XAI (Untouched)
 # ============================================================
 def generate_suggestions(predicted_class):
     if predicted_class == "Suicidal":
@@ -166,105 +179,145 @@ def explain_prediction(new_text_tfidf, new_features, predicted_class):
         return pd.DataFrame()
 
 # ============================================================
-# 6. MAIN UI
+# 6. PROFESSIONAL UI LAYOUT
 # ============================================================
-st.title("🧠 XAI Mental Health Distress Detector")
-st.markdown("Hybrid NLP Model + XAI + Suggestions")
+
+# --- SIDEBAR ---
+with st.sidebar:
+    st.title("🧠 XAI Detector")
+    st.markdown("---")
+    st.markdown("""
+    **About this App:**
+    This application uses a Hybrid NLP machine learning model combined with Explainable AI (XAI) to detect signs of mental health distress in text.
+    
+    **Features Used:**
+    - TF-IDF Vectorization
+    - Sentiment Polarity (TextBlob)
+    - Part-of-Speech Ratios
+    - Keyword Detection
+    """)
+    st.markdown("---")
+    st.warning("**Disclaimer:** This tool is for educational purposes only. It is not a substitute for professional medical advice, diagnosis, or treatment.")
 
 # Check if models loaded successfully
 if tfidf is None or scaler is None or hybrid_model is None:
     st.error("Cannot proceed. Models failed to load. Please ensure your .pkl files are in a 'Models' directory relative to this script.")
     st.stop()
 
-# Input area
-user_input = st.text_area("Enter text for analysis:", height=150)
+# --- MAIN PAGE HEADER ---
+st.title("Mental Health Distress Analysis")
+st.markdown("Enter text below to evaluate language patterns for signs of emotional distress.")
 
-col1, col2 = st.columns([1, 1])
+# --- TABS FOR WORKFLOW ---
+tab_single, tab_batch = st.tabs(["📝 Single Text Analysis", "📁 Batch Dataset Processing"])
 
-with col1:
-    analyze_btn = st.button("🔍 Analyze Text", use_container_width=True, type="primary")
-with col2:
-    uploaded_file = st.file_uploader("📤 Upload Dataset (CSV/Excel) for Batch Analysis", type=["csv", "xlsx"])
+# ============================================================
+# TAB 1: SINGLE ANALYSIS
+# ============================================================
+with tab_single:
+    with st.form("analysis_form"):
+        user_input = st.text_area("Input Text:", height=150, placeholder="Paste text here to analyze...")
+        analyze_btn = st.form_submit_button("🔍 Analyze Text", type="primary")
 
-if analyze_btn:
-    if not user_input.strip():
-        st.warning("Please enter some text before analysis.")
-    else:
-        with st.spinner("Analyzing text..."):
-            # 1. TF-IDF
-            new_text_tfidf = tfidf.transform([user_input])
-            
-            # 2. Engineered Features
-            new_features = extract_features_from_text(user_input)
-            
-            # 3. Scale Features
-            new_features_scaled = scaler.transform(new_features)
-            
-            # 4. Hybrid Features
-            new_hybrid = hstack([new_text_tfidf, new_features_scaled]).tocsr()
-            
-            # 5. Prediction
-            predicted_class = hybrid_model.predict(new_hybrid)[0]
-            
-            # 6. Probabilities
-            if hasattr(hybrid_model, "predict_proba"):
-                probs = hybrid_model.predict_proba(new_hybrid)[0]
-                prob_dict = {str(c): float(p) for c, p in zip(hybrid_model.classes_, probs)}
-                confidence = max(prob_dict.values())
-            else:
-                prob_dict = {}
-                confidence = 0.0
-
-            # 7. XAI
-            explanation_df = explain_prediction(new_text_tfidf, new_features, predicted_class)
-            
-            # 8. Suggestions
-            suggestions = generate_suggestions(predicted_class)
-
-        st.divider()
-        
-        # Display Results Layout
-        res_col1, res_col2 = st.columns([1, 1])
-        
-        with res_col1:
-            st.subheader("Analysis Results")
-            st.metric("Predicted Category", predicted_class)
-            st.metric("Confidence Score", f"{confidence * 100:.2f}%")
-            
-            st.markdown("### Class Probabilities")
-            if prob_dict:
-                # Convert to dataframe for nice Streamlit bar chart
-                prob_df = pd.DataFrame.from_dict(prob_dict, orient='index', columns=['Probability'])
-                st.bar_chart(prob_df)
-                
-            st.markdown("### Remedial Suggestions")
-            for i, sug in enumerate(suggestions, 1):
-                st.info(f"{i}. {sug}")
-
-        with res_col2:
-            st.subheader("XAI Explanation")
-            st.markdown("Features driving this specific prediction (Supporting > 0, Opposing < 0):")
-            
-            if not explanation_df.empty:
-                # Plot horizontal bar chart for XAI
-                explanation_df = explanation_df.set_index("Feature")
-                st.bar_chart(explanation_df["Contribution"])
-                st.dataframe(explanation_df, use_container_width=True)
-            else:
-                st.write("No local explanation available.")
-
-# File upload logic (Batch Processing)
-if uploaded_file is not None:
-    st.divider()
-    st.subheader("Batch Dataset Analysis")
-    try:
-        if uploaded_file.name.endswith(".csv"):
-            df = pd.read_csv(uploaded_file)
+    if analyze_btn:
+        if not user_input.strip():
+            st.warning("⚠️ Please enter some text before analysis.")
         else:
-            df = pd.read_excel(uploaded_file)
+            with st.spinner("Analyzing text patterns..."):
+                # Run Model Pipeline (Untouched)
+                new_text_tfidf = tfidf.transform([user_input])
+                new_features = extract_features_from_text(user_input)
+                new_features_scaled = scaler.transform(new_features)
+                new_hybrid = hstack([new_text_tfidf, new_features_scaled]).tocsr()
+                
+                predicted_class = hybrid_model.predict(new_hybrid)[0]
+                
+                if hasattr(hybrid_model, "predict_proba"):
+                    probs = hybrid_model.predict_proba(new_hybrid)[0]
+                    prob_dict = {str(c): float(p) for c, p in zip(hybrid_model.classes_, probs)}
+                    confidence = max(prob_dict.values())
+                else:
+                    prob_dict = {}
+                    confidence = 0.0
+
+                explanation_df = explain_prediction(new_text_tfidf, new_features, predicted_class)
+                suggestions = generate_suggestions(predicted_class)
+
+            # --- DISPLAY RESULTS DASHBOARD ---
+            st.markdown("### 📊 Analysis Results")
             
-        st.write("Dataset Preview:", df.head())
-        st.info("To process this entire dataset, loop through the target text column applying the `extract_features_from_text` and model `.predict` functions row-by-row.")
-        # Implementation for batch processing would go here
-    except Exception as e:
-        st.error(f"Error reading file: {e}")
+            # Top Metrics Row
+            m1, m2, m3 = st.columns(3)
+            with m1:
+                st.metric("Predicted Category", predicted_class)
+            with m2:
+                st.metric("Confidence Score", f"{confidence * 100:.1f}%")
+            with m3:
+                st.metric("Words Analyzed", len(user_input.split()))
+
+            st.markdown("<br>", unsafe_allow_html=True) # Spacer
+
+            # Nested Tabs for deep-dive information
+            res_tab1, res_tab2, res_tab3 = st.tabs(["📈 Class Probabilities", "🧠 Explainable AI (XAI)", "💡 Recommendations"])
+            
+            with res_tab1:
+                st.markdown("#### Diagnosis Probability Breakdown")
+                st.markdown("The model's confidence across all possible categories:")
+                if prob_dict:
+                    # Professional progress bars instead of raw charts
+                    for label, prob in sorted(prob_dict.items(), key=lambda item: item[1], reverse=True):
+                        col_text, col_bar = st.columns([1, 4])
+                        with col_text:
+                            st.write(f"**{label}**")
+                        with col_bar:
+                            st.progress(prob, text=f"{prob * 100:.1f}%")
+            
+            with res_tab2:
+                st.markdown("#### Feature Contributions")
+                st.markdown("Which specific words or features pushed the model toward this prediction (Supporting > 0, Opposing < 0).")
+                if not explanation_df.empty:
+                    xai_col1, xai_col2 = st.columns([2, 1])
+                    with xai_col1:
+                        explanation_df = explanation_df.set_index("Feature")
+                        st.bar_chart(explanation_df["Contribution"])
+                    with xai_col2:
+                        st.dataframe(
+                            explanation_df.style.background_gradient(cmap='RdYlGn'),
+                            use_container_width=True
+                        )
+                else:
+                    st.info("No local explanation available for this input.")
+
+            with res_tab3:
+                st.markdown("#### Actionable Steps")
+                # Dynamic styling based on severity
+                if predicted_class == "Suicidal":
+                    for sug in suggestions:
+                        st.error(f"🚨 {sug}")
+                elif predicted_class in ["Anxiety", "Depression"]:
+                    for sug in suggestions:
+                        st.warning(f"⚠️ {sug}")
+                else:
+                    for sug in suggestions:
+                        st.success(f"✅ {sug}")
+
+
+# ============================================================
+# TAB 2: BATCH ANALYSIS
+# ============================================================
+with tab_batch:
+    st.markdown("### Upload a CSV or Excel file for bulk analysis")
+    uploaded_file = st.file_uploader("Choose a dataset", type=["csv", "xlsx"])
+    
+    if uploaded_file is not None:
+        try:
+            if uploaded_file.name.endswith(".csv"):
+                df = pd.read_csv(uploaded_file)
+            else:
+                df = pd.read_excel(uploaded_file)
+                
+            st.dataframe(df.head(), use_container_width=True)
+            st.info("Dataset loaded successfully. To process this entire dataset, loop through the target text column applying the `extract_features_from_text` and model `.predict` functions row-by-row.")
+            
+        except Exception as e:
+            st.error(f"Error reading file: {e}")
